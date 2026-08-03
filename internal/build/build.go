@@ -1,0 +1,193 @@
+// Package build orchestrates the pipeline: scan -> model -> render ->
+// search index -> assets -> theme.
+package build
+
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"os"
+	"path"
+	"path/filepath"
+	"strings"
+
+	"github.com/m-tkg/md2site/internal/render"
+	"github.com/m-tkg/md2site/internal/scan"
+	"github.com/m-tkg/md2site/internal/search"
+	"github.com/m-tkg/md2site/internal/site"
+	"github.com/m-tkg/md2site/internal/theme"
+)
+
+// MarkerName is placed in generated output directories so a later build can
+// safely wipe them; directories without it are refused unless --force.
+const MarkerName = ".md2site"
+
+type Config struct {
+	InputDir  string
+	OutputDir string
+	Title     string
+	Excludes  []string
+	Force     bool
+	// Log receives progress and warnings; defaults to os.Stderr.
+	Log io.Writer
+}
+
+func Run(cfg Config) error {
+	log := cfg.Log
+	if log == nil {
+		log = os.Stderr
+	}
+	in, err := filepath.Abs(cfg.InputDir)
+	if err != nil {
+		return err
+	}
+	if st, err := os.Stat(in); err != nil || !st.IsDir() {
+		return fmt.Errorf("input directory %q not found", cfg.InputDir)
+	}
+
+	files, err := scan.Markdown(os.DirFS(in), cfg.Excludes)
+	if err != nil {
+		return fmt.Errorf("scan: %w", err)
+	}
+	if len(files) == 0 {
+		return fmt.Errorf("no markdown files found under %q", cfg.InputDir)
+	}
+
+	s := site.New(files)
+
+	// Parse every page and extract titles before building the nav.
+	docs := make(map[*site.Page]*render.Doc, len(s.Pages))
+	for _, p := range s.Pages {
+		src, err := os.ReadFile(filepath.Join(in, filepath.FromSlash(p.SrcRel)))
+		if err != nil {
+			return fmt.Errorf("read %s: %w", p.SrcRel, err)
+		}
+		p.Source = src
+		d := render.Parse(p)
+		docs[p] = d
+		if p.Title = d.Title(); p.Title == "" {
+			base := path.Base(p.SrcRel)
+			p.Title = strings.TrimSuffix(base, path.Ext(base))
+			if p.IsIndex && path.Dir(p.SrcRel) != "." {
+				p.Title = path.Base(path.Dir(p.SrcRel))
+			}
+		}
+	}
+
+	s.Title = cfg.Title
+	if s.Title == "" {
+		if root := s.LookupSrc("README.md"); root != nil {
+			s.Title = root.Title
+		}
+	}
+	if s.Title == "" {
+		s.Title = filepath.Base(in)
+	}
+	s.BuildNav()
+
+	if err := prepareOutDir(cfg.OutputDir, cfg.Force); err != nil {
+		return err
+	}
+
+	assetSet := map[string]bool{}
+	var entries []search.Entry
+	for _, p := range s.Pages {
+		d := docs[p]
+		body, pageAssets, err := d.Body(s)
+		if err != nil {
+			return err
+		}
+		for _, a := range pageAssets {
+			assetSet[a] = true
+		}
+		pageTitle := p.Title
+		if pageTitle == s.Title {
+			pageTitle = "" // avoid "X · X" on the top page
+		}
+		var buf bytes.Buffer
+		err = theme.Layout.Execute(&buf, theme.PageData{
+			SiteTitle: s.Title,
+			Title:     pageTitle,
+			RelRoot:   p.RelRoot(),
+			Nav:       render.NavHTML(s, p),
+			Content:   body,
+		})
+		if err != nil {
+			return fmt.Errorf("layout %s: %w", p.SrcRel, err)
+		}
+		if err := writeFile(cfg.OutputDir, p.OutRel, buf.Bytes()); err != nil {
+			return err
+		}
+		entries = append(entries, search.Entry{Title: p.Title, URL: p.OutRel, Body: d.PlainText()})
+	}
+
+	indexJS, err := search.IndexJS(entries)
+	if err != nil {
+		return err
+	}
+	if err := writeFile(cfg.OutputDir, "assets/search-index.js", indexJS); err != nil {
+		return err
+	}
+	if err := theme.WriteAssets(cfg.OutputDir); err != nil {
+		return err
+	}
+	copyAssets(s, in, cfg.OutputDir, assetSet)
+
+	for _, w := range s.Warnings {
+		fmt.Fprintln(log, "warning:", w)
+	}
+	fmt.Fprintf(log, "md2site: %d pages -> %s\n", len(s.Pages), cfg.OutputDir)
+	return nil
+}
+
+func copyAssets(s *site.Site, inDir, outDir string, assets map[string]bool) {
+	for rel := range assets {
+		src := filepath.Join(inDir, filepath.FromSlash(rel))
+		data, err := os.ReadFile(src)
+		if err != nil {
+			s.Warnf("asset %s: %v", rel, err)
+			continue
+		}
+		if err := writeFile(outDir, rel, data); err != nil {
+			s.Warnf("asset %s: %v", rel, err)
+		}
+	}
+}
+
+func writeFile(outDir, rel string, data []byte) error {
+	dst := filepath.Join(outDir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(dst, data, 0o644)
+}
+
+// prepareOutDir empties the output directory. A non-empty directory is only
+// wiped when it carries the marker from a previous build (or --force).
+func prepareOutDir(out string, force bool) error {
+	entries, err := os.ReadDir(out)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return initOutDir(out)
+		}
+		return err
+	}
+	if len(entries) == 0 {
+		return initOutDir(out)
+	}
+	marker := filepath.Join(out, MarkerName)
+	if _, err := os.Stat(marker); err != nil && !force {
+		return fmt.Errorf("output directory %q is not empty and has no %s marker; use --force to overwrite", out, MarkerName)
+	}
+	if err := os.RemoveAll(out); err != nil {
+		return err
+	}
+	return initOutDir(out)
+}
+
+func initOutDir(out string) error {
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(out, MarkerName), []byte("generated by md2site; safe to delete\n"), 0o644)
+}

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="md2site">
+<title>{{if .Title}}{{.Title}} · {{end}}{{.SiteTitle}}</title>
+<link rel="stylesheet" href="{{.RelRoot}}assets/style.css">
+<script>window.__MD2SITE_ROOT__={{.RelRoot}};</script>
+<script src="{{.RelRoot}}assets/search-index.js" defer></script>
+<script src="{{.RelRoot}}assets/app.js" defer></script>
+</head>
+<body>
+<button id="sidebar-toggle" aria-label="Toggle navigation">☰</button>
+<aside id="sidebar">
+  <a class="site-title" href="{{.RelRoot}}index.html">{{.SiteTitle}}</a>
+  <input id="search" type="search" placeholder="検索..." autocomplete="off">
+  <div id="search-results" hidden></div>
+  <nav id="nav">{{.Nav}}</nav>
+</aside>
+<main>
+<article class="markdown-body">
+{{.Content}}
+</article>
+</main>
+</body>
+</html>
