@@ -12,10 +12,14 @@ import (
 const usage = `Usage:
   md2site build <input-dir> [-o <output-dir>] [--exclude <glob>]... [--title <name>] [--force]
   md2site serve <input-dir> [--port <port>] [--exclude <glob>]... [--title <name>]
+  md2site version
+  md2site upgrade
 
 Commands:
-  build   Generate a static site from markdown files under <input-dir>.
-  serve   Build into a temporary directory and serve it over HTTP.
+  build     Generate a static site from markdown files under <input-dir>.
+  serve     Build into a temporary directory and serve it over HTTP.
+  version   Print the installed version.
+  upgrade   Update to the latest release (runs "go install ...@latest").
 
 Flags:
   -o string        Output directory (default "./public").
@@ -62,6 +66,11 @@ func Run(args []string) error {
 		return runBuild(args[1:])
 	case "serve":
 		return runServe(args[1:])
+	case "version", "-v", "--version":
+		fmt.Println("md2site", Version())
+		return nil
+	case "upgrade":
+		return runUpgrade()
 	case "-h", "--help", "help":
 		fmt.Print(usage)
 		return nil

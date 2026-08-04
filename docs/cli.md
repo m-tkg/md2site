@@ -20,6 +20,20 @@ md2site serve path/to/repo --port 8080
 # → http://127.0.0.1:8080/
 ```
 
+### `md2site version`
+
+インストール中のバージョンを表示します（`go install` が埋め込むモジュールバージョン。ソースビルドでは `devel`）。
+
+### `md2site upgrade`
+
+最新版へ更新します。md2site は `go install` で配布されるため、インストールできた環境には必ず Go toolchain があります。upgrade はそれを利用して内部で `go install github.com/m-tkg/md2site@latest` を実行し、更新後のバージョンを表示します。
+
+```sh
+md2site upgrade
+# md2site v0.1.0 -> go install github.com/m-tkg/md2site@latest
+# installed: mod github.com/m-tkg/md2site v0.2.0 ...
+```
+
 ## フラグ
 
 | フラグ | 対象 | 説明 |

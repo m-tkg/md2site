@@ -27,6 +27,13 @@
 go install github.com/m-tkg/md2site@latest
 ```
 
+アップデートは同じコマンドの再実行、または:
+
+```sh
+md2site upgrade    # 内部で go install ...@latest を実行
+md2site version    # インストール中のバージョン確認
+```
+
 ## 使い方
 
 ```sh
