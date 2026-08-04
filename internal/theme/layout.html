@@ -6,12 +6,24 @@
 <meta name="generator" content="md2site">
 <title>{{if .Title}}{{.Title}} · {{end}}{{.SiteTitle}}</title>
 <link rel="stylesheet" href="{{.RelRoot}}assets/style.css">
-<script>window.__MD2SITE_ROOT__={{.RelRoot}};</script>
+<script>window.__MD2SITE_ROOT__={{.RelRoot}};
+(function(){try{var d=document.documentElement,s=localStorage,w;
+if((w=s.getItem("md2site.sidebarWidth")))d.style.setProperty("--sidebar-width",w);
+if((w=s.getItem("md2site.outlineWidth")))d.style.setProperty("--outline-width",w);
+}catch(e){}})();</script>
 <script src="{{.RelRoot}}assets/search-index.js" defer></script>
 <script src="{{.RelRoot}}assets/app.js" defer></script>
 </head>
 <body{{if .Outline}} class="has-outline"{{end}}>
+<script>(function(){try{var s=localStorage,c=document.body.classList;
+if(s.getItem("md2site.sidebarCollapsed")==="1")c.add("sidebar-collapsed");
+if(s.getItem("md2site.outlineCollapsed")==="1")c.add("outline-collapsed");
+}catch(e){}})();</script>
 <button id="sidebar-toggle" aria-label="Toggle navigation">☰</button>
+<button id="sidebar-collapse" class="col-toggle" aria-label="ナビを折りたたむ/展開"></button>
+{{if .Outline}}<button id="outline-collapse" class="col-toggle" aria-label="アウトラインを折りたたむ/展開"></button>{{end}}
+<div id="sidebar-resize" class="resize-handle" aria-hidden="true"></div>
+{{if .Outline}}<div id="outline-resize" class="resize-handle" aria-hidden="true"></div>{{end}}
 <aside id="sidebar">
   <a class="site-title" href="{{.RelRoot}}index.html">{{.SiteTitle}}</a>
   <input id="search" type="search" placeholder="検索..." autocomplete="off">
@@ -19,7 +31,6 @@
   <nav id="nav">{{.Nav}}</nav>
 </aside>
 {{if .Outline}}<nav id="outline" aria-label="Page outline">
-  <div class="outline-title">このページ</div>
   {{.Outline}}
 </nav>{{end}}
 <main>

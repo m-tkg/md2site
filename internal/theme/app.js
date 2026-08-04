@@ -14,6 +14,57 @@
     });
   }
 
+  // --- Collapsible / resizable columns (state kept in localStorage) ---
+  function store(key, value) {
+    try { localStorage.setItem("md2site." + key, value); } catch (e) {}
+  }
+  function cssPx(name) {
+    return parseInt(getComputedStyle(document.documentElement).getPropertyValue(name), 10) || 0;
+  }
+
+  function initCollapse(btn, cls, key) {
+    if (!btn) return;
+    var sync = function () {
+      btn.textContent = document.body.classList.contains(cls) ? "›" : "‹"; // › / ‹
+    };
+    btn.addEventListener("click", function () {
+      var collapsed = document.body.classList.toggle(cls);
+      store(key, collapsed ? "1" : "0");
+      sync();
+    });
+    sync();
+  }
+  initCollapse(document.getElementById("sidebar-collapse"), "sidebar-collapsed", "sidebarCollapsed");
+  initCollapse(document.getElementById("outline-collapse"), "outline-collapsed", "outlineCollapsed");
+
+  function initResize(handle, varName, key, min, max, offsetFn) {
+    if (!handle) return;
+    handle.addEventListener("mousedown", function (e) {
+      e.preventDefault();
+      handle.classList.add("dragging");
+      document.body.classList.add("dragging");
+      var onMove = function (ev) {
+        var w = Math.min(max, Math.max(min, ev.clientX - offsetFn()));
+        document.documentElement.style.setProperty(varName, w + "px");
+      };
+      var onUp = function () {
+        handle.classList.remove("dragging");
+        document.body.classList.remove("dragging");
+        store(key, cssPx(varName) + "px");
+        window.removeEventListener("mousemove", onMove);
+        window.removeEventListener("mouseup", onUp);
+      };
+      window.addEventListener("mousemove", onMove);
+      window.addEventListener("mouseup", onUp);
+    });
+  }
+  initResize(document.getElementById("sidebar-resize"), "--sidebar-width", "sidebarWidth",
+    180, 520, function () { return 0; });
+  initResize(document.getElementById("outline-resize"), "--outline-width", "outlineWidth",
+    160, 440, function () {
+      return document.body.classList.contains("sidebar-collapsed") ? 0 : cssPx("--sidebar-width");
+    });
+
   // Outline scroll spy: highlight the heading currently at the top.
   var outline = document.getElementById("outline");
   if (outline) {
