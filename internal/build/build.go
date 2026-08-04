@@ -110,6 +110,7 @@ func Run(cfg Config) error {
 			Title:     pageTitle,
 			RelRoot:   p.RelRoot(),
 			Nav:       render.NavHTML(s, p),
+			Outline:   render.OutlineHTML(d.Outline()),
 			Content:   body,
 		})
 		if err != nil {

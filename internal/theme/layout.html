@@ -10,7 +10,7 @@
 <script src="{{.RelRoot}}assets/search-index.js" defer></script>
 <script src="{{.RelRoot}}assets/app.js" defer></script>
 </head>
-<body>
+<body{{if .Outline}} class="has-outline"{{end}}>
 <button id="sidebar-toggle" aria-label="Toggle navigation">☰</button>
 <aside id="sidebar">
   <a class="site-title" href="{{.RelRoot}}index.html">{{.SiteTitle}}</a>
@@ -18,6 +18,10 @@
   <div id="search-results" hidden></div>
   <nav id="nav">{{.Nav}}</nav>
 </aside>
+{{if .Outline}}<nav id="outline" aria-label="Page outline">
+  <div class="outline-title">このページ</div>
+  {{.Outline}}
+</nav>{{end}}
 <main>
 <article class="markdown-body">
 {{.Content}}

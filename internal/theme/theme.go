@@ -31,6 +31,7 @@ type PageData struct {
 	Title     string
 	RelRoot   string
 	Nav       template.HTML
+	Outline   template.HTML // empty when the page has at most one heading
 	Content   template.HTML
 }
 

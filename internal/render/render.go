@@ -43,8 +43,68 @@ type Doc struct {
 
 // Parse parses the page source. Call before title extraction or rendering.
 func Parse(p *site.Page) *Doc {
-	root := md.Parser().Parse(text.NewReader(p.Source))
+	ctx := parser.NewContext(parser.WithIDs(newIDs()))
+	root := md.Parser().Parse(text.NewReader(p.Source), parser.WithContext(ctx))
 	return &Doc{page: p, root: root}
+}
+
+// Heading is one outline entry of a page.
+type Heading struct {
+	Level int
+	Text  string
+	ID    string
+}
+
+// outlineMaxLevel bounds the outline depth; deeper headings stay in the
+// body but out of the outline column.
+const outlineMaxLevel = 4
+
+// Outline lists the page's headings (levels 1..outlineMaxLevel) in order.
+func (d *Doc) Outline() []Heading {
+	var hs []Heading
+	ast.Walk(d.root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if h, ok := n.(*ast.Heading); ok && entering && h.Level <= outlineMaxLevel {
+			id := ""
+			if v, ok := h.AttributeString("id"); ok {
+				if b, ok := v.([]byte); ok {
+					id = string(b)
+				}
+			}
+			hs = append(hs, Heading{Level: h.Level, Text: strings.TrimSpace(nodeText(h, d.page.Source)), ID: id})
+		}
+		return ast.WalkContinue, nil
+	})
+	return hs
+}
+
+// OutlineHTML renders the outline as nested lists of in-page anchor links.
+// Returns "" when the page has at most one heading (an outline of just the
+// title carries no information).
+func OutlineHTML(hs []Heading) template.HTML {
+	if len(hs) <= 1 {
+		return ""
+	}
+	var b strings.Builder
+	var stack []int // heading levels of the open lists
+	for _, h := range hs {
+		switch {
+		case len(stack) == 0 || h.Level > stack[len(stack)-1]:
+			// One list deeper, even when heading levels skip (h2 -> h4).
+			b.WriteString("<ul>")
+			stack = append(stack, h.Level)
+		default:
+			for len(stack) > 1 && h.Level < stack[len(stack)-1] {
+				b.WriteString("</li></ul>")
+				stack = stack[:len(stack)-1]
+			}
+			b.WriteString("</li>")
+		}
+		fmt.Fprintf(&b, "<li><a href=\"#%s\">%s</a>", h.ID, html.EscapeString(h.Text))
+	}
+	for range stack {
+		b.WriteString("</li></ul>")
+	}
+	return template.HTML(b.String())
 }
 
 // Title returns the text of the first level-1 heading, or "".

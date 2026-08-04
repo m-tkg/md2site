@@ -14,6 +14,39 @@
     });
   }
 
+  // Outline scroll spy: highlight the heading currently at the top.
+  var outline = document.getElementById("outline");
+  if (outline) {
+    var outlineLinks = {};
+    outline.querySelectorAll('a[href^="#"]').forEach(function (a) {
+      outlineLinks[decodeURIComponent(a.getAttribute("href").slice(1))] = a;
+    });
+    var headings = Array.prototype.filter.call(
+      document.querySelectorAll("main h1[id], main h2[id], main h3[id], main h4[id]"),
+      function (h) { return outlineLinks[h.id]; }
+    );
+    var activeLink = null;
+    var updateSpy = function () {
+      var cur = null;
+      for (var i = 0; i < headings.length; i++) {
+        if (headings[i].getBoundingClientRect().top <= 80) cur = headings[i];
+        else break;
+      }
+      var link = cur ? outlineLinks[cur.id] : null;
+      if (link === activeLink) return;
+      if (activeLink) activeLink.classList.remove("current");
+      if (link) link.classList.add("current");
+      activeLink = link;
+    };
+    var ticking = false;
+    window.addEventListener("scroll", function () {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(function () { ticking = false; updateSpy(); });
+    }, { passive: true });
+    updateSpy();
+  }
+
   if (!input) return;
 
   // Substring search over normalized title+body. Works for Japanese text

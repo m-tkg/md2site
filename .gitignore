@@ -1,6 +1,5 @@
 /public/
 /md2site
 .playwright-mcp/
-/md2site-page.png
-/pages-live.png
+/*.png
 /_site/

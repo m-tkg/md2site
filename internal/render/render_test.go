@@ -69,6 +69,52 @@ func TestRewriteLinks(t *testing.T) {
 	}
 }
 
+func TestOutline(t *testing.T) {
+	s := newSite(t, map[string]string{
+		"a.md": "# セットアップ手順\n\n## インストール\n\n### Usage\n\n## インストール\n\n本文\n\n##### deep\n",
+	})
+	d := Parse(s.LookupSrc("a.md"))
+	hs := d.Outline()
+	want := []Heading{
+		{1, "セットアップ手順", "セットアップ手順"},
+		{2, "インストール", "インストール"},
+		{3, "Usage", "usage"},
+		{2, "インストール", "インストール-1"}, // duplicates uniquified
+	}
+	if len(hs) != len(want) { // h5 excluded by outlineMaxLevel
+		t.Fatalf("Outline() = %+v", hs)
+	}
+	for i, w := range want {
+		if hs[i] != w {
+			t.Errorf("Outline()[%d] = %+v, want %+v", i, hs[i], w)
+		}
+	}
+	out := string(OutlineHTML(hs))
+	if !strings.Contains(out, `<a href="#セットアップ手順">セットアップ手順</a>`) ||
+		!strings.Contains(out, `<a href="#インストール-1">`) {
+		t.Errorf("OutlineHTML = %s", out)
+	}
+	if strings.Count(out, "<ul>") != strings.Count(out, "</ul>") ||
+		strings.Count(out, "<li>") != strings.Count(out, "</li>") {
+		t.Errorf("unbalanced outline HTML: %s", out)
+	}
+}
+
+func TestOutlineHTMLStartsDeep(t *testing.T) {
+	// First heading deeper than a later one must not over-close lists.
+	out := string(OutlineHTML([]Heading{{2, "a", "a"}, {4, "b", "b"}, {1, "c", "c"}}))
+	if strings.Count(out, "<ul>") != strings.Count(out, "</ul>") ||
+		strings.Count(out, "<li>") != strings.Count(out, "</li>") {
+		t.Errorf("unbalanced outline HTML: %s", out)
+	}
+}
+
+func TestOutlineHTMLSingleHeading(t *testing.T) {
+	if out := OutlineHTML([]Heading{{1, "only", "only"}}); out != "" {
+		t.Errorf("single-heading outline should be empty, got %s", out)
+	}
+}
+
 func TestNavHTMLCurrentPage(t *testing.T) {
 	s := newSite(t, map[string]string{
 		"README.md": "# top\n",
