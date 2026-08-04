@@ -12,6 +12,15 @@
 - **どこでも配信可能** — すべて相対リンクで生成するため、GitHub Pages のサブパス配下でも base URL 設定なしで動きます
 - **コードハイライト** — chroma によるシンタックスハイライト（ライト/ダーク自動切替）
 
+## ドキュメント
+
+詳細は [docs/](docs/README.md) を参照してください（[公開版はこちら](https://m-tkg.github.io/md2site/)。md2site 自身で生成しています）。
+
+- [CLI リファレンス](docs/cli.md)
+- [アーキテクチャと技術スタック](docs/architecture.md)
+- [検索の仕組み](docs/search.md)
+- [GitHub Pages への公開](docs/github-pages.md)
+
 ## インストール
 
 ```sh
