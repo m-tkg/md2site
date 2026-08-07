@@ -27,12 +27,14 @@ var Layout = template.Must(template.New("layout").Parse(layoutSrc))
 
 // PageData is the input to the layout template.
 type PageData struct {
-	SiteTitle string
-	Title     string
-	RelRoot   string
-	Nav       template.HTML
-	Outline   template.HTML // empty when the page has at most one heading
-	Content   template.HTML
+	SiteTitle  string
+	Title      string
+	RelRoot    string
+	Nav        template.HTML
+	Outline    template.HTML // empty when the page has at most one heading
+	Content    template.HTML
+	Updated    string // formatted source modification time
+	UpdatedISO string // RFC3339 for <time datetime>
 }
 
 // WriteAssets writes style.css (with chroma highlight styles appended) and

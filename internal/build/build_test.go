@@ -21,6 +21,8 @@ func TestRunFixture(t *testing.T) {
 		"guide/index.html",
 		"docs/index.html",
 		"docs/setup/index.html",
+		"data/index.html",
+		"metrics/index.html",
 		"assets/style.css",
 		"assets/app.js",
 		"assets/search-index.js",
@@ -43,6 +45,8 @@ func TestRunFixture(t *testing.T) {
 		`href="docs/setup/index.html"`,
 		`href="docs/index.html"`, // directory link resolved to its README
 		`<img src="img/logo.png"`,
+		`class="page-updated"`,
+		`id="view-controls"`,
 	} {
 		if !strings.Contains(index, want) {
 			t.Errorf("index.html missing %s", want)
@@ -60,8 +64,25 @@ func TestRunFixture(t *testing.T) {
 		}
 	}
 
+	csvPage := readOut(t, out, "data/index.html")
+	for _, want := range []string{
+		"<h1>data</h1>",
+		`<table class="tabular-table">`,
+		"<th>name</th>",
+		"<td>Alice</td>",
+	} {
+		if !strings.Contains(csvPage, want) {
+			t.Errorf("data/index.html missing %s", want)
+		}
+	}
+
+	tsvPage := readOut(t, out, "metrics/index.html")
+	if !strings.Contains(tsvPage, "<th>metric</th>") || !strings.Contains(tsvPage, "<td>145</td>") {
+		t.Errorf("metrics/index.html missing tsv table content")
+	}
+
 	searchJS := readOut(t, out, "assets/search-index.js")
-	for _, want := range []string{"サンプルプロジェクト", "日本語の検索テスト用テキスト", "guide/index.html"} {
+	for _, want := range []string{"サンプルプロジェクト", "日本語の検索テスト用テキスト", "guide/index.html", "Alice", "users"} {
 		if !strings.Contains(searchJS, want) {
 			t.Errorf("search-index.js missing %s", want)
 		}
