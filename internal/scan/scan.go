@@ -1,4 +1,4 @@
-// Package scan walks an input directory and collects markdown files,
+// Package scan walks an input directory and collects site source files,
 // applying fixed and user-supplied exclusion rules.
 package scan
 
@@ -15,11 +15,17 @@ var fixedExcludedDirs = map[string]bool{
 	".git":         true,
 }
 
-// Markdown returns the slash-separated paths (relative to root) of all
-// markdown files under root, sorted. Hidden directories, node_modules,
-// vendor and .git are always skipped; extra glob patterns are matched
-// against both the relative path and the base name.
-func Markdown(fsys fs.FS, excludes []string) ([]string, error) {
+var sourceExts = map[string]bool{
+	".md":  true,
+	".csv": true,
+	".tsv": true,
+}
+
+// Sources returns the slash-separated paths (relative to root) of all
+// supported source files under root, sorted. Hidden directories,
+// node_modules, vendor and .git are always skipped; extra glob patterns are
+// matched against both the relative path and the base name.
+func Sources(fsys fs.FS, excludes []string) ([]string, error) {
 	var files []string
 	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
@@ -35,7 +41,7 @@ func Markdown(fsys fs.FS, excludes []string) ([]string, error) {
 			}
 			return nil
 		}
-		if strings.HasPrefix(name, ".") || !strings.EqualFold(path.Ext(name), ".md") {
+		if strings.HasPrefix(name, ".") || !sourceExts[strings.ToLower(path.Ext(name))] {
 			return nil
 		}
 		if matchAny(excludes, p, name) {
@@ -49,6 +55,11 @@ func Markdown(fsys fs.FS, excludes []string) ([]string, error) {
 	}
 	sort.Strings(files)
 	return files, nil
+}
+
+// Markdown is an alias for Sources kept for compatibility.
+func Markdown(fsys fs.FS, excludes []string) ([]string, error) {
+	return Sources(fsys, excludes)
 }
 
 func matchAny(patterns []string, relPath, base string) bool {

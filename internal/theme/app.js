@@ -22,10 +22,13 @@
     return parseInt(getComputedStyle(document.documentElement).getPropertyValue(name), 10) || 0;
   }
 
-  function initCollapse(btn, cls, key) {
+  function initViewToggle(btn, cls, key, labels) {
     if (!btn) return;
     var sync = function () {
-      btn.textContent = document.body.classList.contains(cls) ? "›" : "‹"; // › / ‹
+      var visible = !document.body.classList.contains(cls);
+      btn.classList.toggle("active", visible);
+      btn.setAttribute("aria-pressed", visible ? "true" : "false");
+      btn.title = visible ? labels.hide : labels.show;
     };
     btn.addEventListener("click", function () {
       var collapsed = document.body.classList.toggle(cls);
@@ -34,17 +37,86 @@
     });
     sync();
   }
-  initCollapse(document.getElementById("sidebar-collapse"), "sidebar-collapsed", "sidebarCollapsed");
-  initCollapse(document.getElementById("outline-collapse"), "outline-collapsed", "outlineCollapsed");
+  initViewToggle(document.getElementById("view-nav"), "sidebar-collapsed", "sidebarCollapsed", {
+    show: "Show navigation",
+    hide: "Hide navigation"
+  });
 
-  function initResize(handle, varName, key, min, max, offsetFn) {
+  function initOutlineMenu(menu, btn, dropdown) {
+    if (!menu || !btn || !dropdown) return;
+    var items = dropdown.querySelectorAll("[data-action]");
+    var toggleItem = dropdown.querySelector('[data-action="toggle"]');
+
+    var sync = function () {
+      var visible = !document.body.classList.contains("outline-collapsed");
+      var left = document.body.classList.contains("outline-left");
+      btn.classList.toggle("active", visible);
+      btn.setAttribute("aria-pressed", visible ? "true" : "false");
+      if (toggleItem) toggleItem.textContent = visible ? "Hide" : "Show";
+      items.forEach(function (item) {
+        var action = item.getAttribute("data-action");
+        var selected = (action === "left" && left) || (action === "right" && !left);
+        item.classList.toggle("selected", selected);
+        item.setAttribute("aria-checked", selected ? "true" : "false");
+      });
+    };
+
+    var close = function () {
+      dropdown.hidden = true;
+      btn.setAttribute("aria-expanded", "false");
+    };
+
+    var open = function () {
+      sync();
+      dropdown.hidden = false;
+      btn.setAttribute("aria-expanded", "true");
+    };
+
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (dropdown.hidden) open();
+      else close();
+    });
+
+    items.forEach(function (item) {
+      item.addEventListener("click", function (e) {
+        e.stopPropagation();
+        var action = item.getAttribute("data-action");
+        if (action === "left") {
+          document.body.classList.add("outline-left");
+          store("outlineSide", "left");
+        } else if (action === "right") {
+          document.body.classList.remove("outline-left");
+          store("outlineSide", "right");
+        } else if (action === "toggle") {
+          var collapsed = document.body.classList.toggle("outline-collapsed");
+          store("outlineCollapsed", collapsed ? "1" : "0");
+        }
+        sync();
+        close();
+      });
+    });
+
+    document.addEventListener("click", function () { close(); });
+    document.addEventListener("keydown", function (e) {
+      if (e.key === "Escape") close();
+    });
+    sync();
+  }
+  initOutlineMenu(
+    document.getElementById("view-outline-menu"),
+    document.getElementById("view-outline"),
+    document.getElementById("view-outline-dropdown")
+  );
+
+  function initResize(handle, varName, key, min, max, widthFn) {
     if (!handle) return;
     handle.addEventListener("mousedown", function (e) {
       e.preventDefault();
       handle.classList.add("dragging");
       document.body.classList.add("dragging");
       var onMove = function (ev) {
-        var w = Math.min(max, Math.max(min, ev.clientX - offsetFn()));
+        var w = Math.min(max, Math.max(min, widthFn(ev)));
         document.documentElement.style.setProperty(varName, w + "px");
       };
       var onUp = function () {
@@ -59,10 +131,14 @@
     });
   }
   initResize(document.getElementById("sidebar-resize"), "--sidebar-width", "sidebarWidth",
-    180, 520, function () { return 0; });
+    180, 520, function (ev) { return ev.clientX; });
   initResize(document.getElementById("outline-resize"), "--outline-width", "outlineWidth",
-    160, 440, function () {
-      return document.body.classList.contains("sidebar-collapsed") ? 0 : cssPx("--sidebar-width");
+    160, 440, function (ev) {
+      if (document.body.classList.contains("outline-left")) {
+        var offset = document.body.classList.contains("sidebar-collapsed") ? 0 : cssPx("--sidebar-width");
+        return ev.clientX - offset;
+      }
+      return window.innerWidth - ev.clientX;
     });
 
   // Outline scroll spy: highlight the heading currently at the top.

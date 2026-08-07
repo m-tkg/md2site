@@ -7,6 +7,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 )
 
 type Page struct {
@@ -15,6 +16,13 @@ type Page struct {
 	Title   string // first h1, or file name without extension
 	IsIndex bool   // true for README.md pages
 	Source  []byte
+	ModTime time.Time // source file modification time
+}
+
+// IsTabular reports whether the page is a CSV or TSV source file.
+func (p *Page) IsTabular() bool {
+	ext := strings.ToLower(path.Ext(p.SrcRel))
+	return ext == ".csv" || ext == ".tsv"
 }
 
 // Depth is the number of directories between the page's output file and the
@@ -60,9 +68,9 @@ func isReadme(name string) bool {
 	return strings.EqualFold(name, "README.md")
 }
 
-// New maps the scanned markdown files to pages and builds the nav tree.
-// Sources must be loaded by the caller afterwards; here only paths are laid
-// out so collisions can be resolved globally.
+// New maps scanned source files to pages. Sources must be loaded by the
+// caller afterwards; here only paths are laid out so collisions can be
+// resolved globally.
 func New(files []string) *Site {
 	s := &Site{bySrc: map[string]*Page{}}
 
@@ -73,6 +81,7 @@ func New(files []string) *Site {
 		}
 	}
 
+	claimed := map[string]bool{}
 	for _, f := range files {
 		dir, base := path.Dir(f), path.Base(f)
 		stem := strings.TrimSuffix(base, path.Ext(base))
@@ -85,14 +94,21 @@ func New(files []string) *Site {
 			} else {
 				p.OutRel = dir + "/index.html"
 			}
-		case readmeDirs[path.Join(dir, stem)]:
-			// foo.md next to foo/README.md would collide on foo/index.html:
-			// the README wins, this page falls back to flat foo.html.
-			p.OutRel = strings.TrimSuffix(f, path.Ext(f)) + ".html"
-			s.Warnf("%s collides with %s; writing flat %s", f, path.Join(dir, stem, "README.md"), p.OutRel)
 		default:
 			p.OutRel = strings.TrimSuffix(f, path.Ext(f)) + "/index.html"
+			if readmeDirs[path.Join(dir, stem)] {
+				p.OutRel = strings.TrimSuffix(f, path.Ext(f)) + ".html"
+				s.Warnf("%s collides with %s; writing flat %s", f, path.Join(dir, stem, "README.md"), p.OutRel)
+			} else if claimed[p.OutRel] {
+				p.OutRel = strings.TrimSuffix(f, path.Ext(f)) + ".html"
+				s.Warnf("%s collides on %s; writing flat %s", f, strings.TrimSuffix(f, path.Ext(f))+"/index.html", p.OutRel)
+			}
 		}
+		if claimed[p.OutRel] {
+			s.Warnf("%s: output path %s already taken; skipping duplicate", f, p.OutRel)
+			continue
+		}
+		claimed[p.OutRel] = true
 		s.Pages = append(s.Pages, p)
 		s.bySrc[strings.ToLower(f)] = p
 	}

@@ -6,6 +6,23 @@ import (
 	"testing/fstest"
 )
 
+func TestSourcesIncludesTabular(t *testing.T) {
+	fsys := fstest.MapFS{
+		"README.md": {Data: []byte("x")},
+		"a.csv":     {Data: []byte("x")},
+		"b.tsv":     {Data: []byte("x")},
+		"c.txt":     {Data: []byte("x")},
+	}
+	got, err := Sources(fsys, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"README.md", "a.csv", "b.tsv"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Sources() = %v, want %v", got, want)
+	}
+}
+
 func TestMarkdown(t *testing.T) {
 	fsys := fstest.MapFS{
 		"README.md":                {Data: []byte("x")},

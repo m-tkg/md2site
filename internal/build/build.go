@@ -10,6 +10,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/m-tkg/md2site/internal/render"
 	"github.com/m-tkg/md2site/internal/scan"
@@ -45,12 +46,12 @@ func Run(cfg Config) error {
 		return fmt.Errorf("input directory %q not found", cfg.InputDir)
 	}
 
-	files, err := scan.Markdown(os.DirFS(in), cfg.Excludes)
+	files, err := scan.Sources(os.DirFS(in), cfg.Excludes)
 	if err != nil {
 		return fmt.Errorf("scan: %w", err)
 	}
 	if len(files) == 0 {
-		return fmt.Errorf("no markdown files found under %q", cfg.InputDir)
+		return fmt.Errorf("no supported files found under %q (.md, .csv, .tsv)", cfg.InputDir)
 	}
 
 	s := site.New(files)
@@ -58,12 +59,19 @@ func Run(cfg Config) error {
 	// Parse every page and extract titles before building the nav.
 	docs := make(map[*site.Page]*render.Doc, len(s.Pages))
 	for _, p := range s.Pages {
-		src, err := os.ReadFile(filepath.Join(in, filepath.FromSlash(p.SrcRel)))
+		srcPath := filepath.Join(in, filepath.FromSlash(p.SrcRel))
+		src, err := os.ReadFile(srcPath)
 		if err != nil {
 			return fmt.Errorf("read %s: %w", p.SrcRel, err)
 		}
+		if st, err := os.Stat(srcPath); err == nil {
+			p.ModTime = st.ModTime()
+		}
 		p.Source = src
-		d := render.Parse(p)
+		d, err := render.Parse(p)
+		if err != nil {
+			return err
+		}
 		docs[p] = d
 		if p.Title = d.Title(); p.Title == "" {
 			base := path.Base(p.SrcRel)
@@ -105,13 +113,20 @@ func Run(cfg Config) error {
 			pageTitle = "" // avoid "X · X" on the top page
 		}
 		var buf bytes.Buffer
+		updated, updatedISO := "", ""
+		if !p.ModTime.IsZero() {
+			updated = p.ModTime.Format("2006年1月2日 15:04")
+			updatedISO = p.ModTime.Format(time.RFC3339)
+		}
 		err = theme.Layout.Execute(&buf, theme.PageData{
-			SiteTitle: s.Title,
-			Title:     pageTitle,
-			RelRoot:   p.RelRoot(),
-			Nav:       render.NavHTML(s, p),
-			Outline:   render.OutlineHTML(d.Outline()),
-			Content:   body,
+			SiteTitle:  s.Title,
+			Title:      pageTitle,
+			RelRoot:    p.RelRoot(),
+			Nav:        render.NavHTML(s, p),
+			Outline:    render.OutlineHTML(d.Outline()),
+			Content:    body,
+			Updated:    updated,
+			UpdatedISO: updatedISO,
 		})
 		if err != nil {
 			return fmt.Errorf("layout %s: %w", p.SrcRel, err)

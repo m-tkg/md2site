@@ -18,10 +18,20 @@ if((w=s.getItem("md2site.outlineWidth")))d.style.setProperty("--outline-width",w
 <script>(function(){try{var s=localStorage,c=document.body.classList;
 if(s.getItem("md2site.sidebarCollapsed")==="1")c.add("sidebar-collapsed");
 if(s.getItem("md2site.outlineCollapsed")==="1")c.add("outline-collapsed");
+if(s.getItem("md2site.outlineSide")==="left")c.add("outline-left");
 }catch(e){}})();</script>
 <button id="sidebar-toggle" aria-label="Toggle navigation">☰</button>
-<button id="sidebar-collapse" class="col-toggle" aria-label="ナビを折りたたむ/展開"></button>
-{{if .Outline}}<button id="outline-collapse" class="col-toggle" aria-label="アウトラインを折りたたむ/展開"></button>{{end}}
+<div id="view-controls" class="view-controls" role="toolbar" aria-label="Panels">
+  <button id="view-nav" class="view-btn" type="button" aria-pressed="true" title="Toggle navigation">Nav</button>
+  {{if .Outline}}<div class="view-menu" id="view-outline-menu">
+    <button id="view-outline" class="view-btn" type="button" aria-haspopup="menu" aria-expanded="false" aria-pressed="true" title="Outline options">Outline</button>
+    <div id="view-outline-dropdown" class="view-dropdown" role="menu" hidden>
+      <button type="button" class="view-dropdown-item" role="menuitem" data-action="left">To left</button>
+      <button type="button" class="view-dropdown-item" role="menuitem" data-action="right">To right</button>
+      <button type="button" class="view-dropdown-item" role="menuitem" data-action="toggle">Hide</button>
+    </div>
+  </div>{{end}}
+</div>
 <div id="sidebar-resize" class="resize-handle" aria-hidden="true"></div>
 {{if .Outline}}<div id="outline-resize" class="resize-handle" aria-hidden="true"></div>{{end}}
 <aside id="sidebar">
@@ -34,6 +44,9 @@ if(s.getItem("md2site.outlineCollapsed")==="1")c.add("outline-collapsed");
   {{.Outline}}
 </nav>{{end}}
 <main>
+{{if .Updated}}<header class="page-header">
+  <time class="page-updated" datetime="{{.UpdatedISO}}">更新: {{.Updated}}</time>
+</header>{{end}}
 <article class="markdown-body">
 {{.Content}}
 </article>

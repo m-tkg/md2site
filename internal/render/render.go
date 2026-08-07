@@ -35,17 +35,33 @@ var md = goldmark.New(
 	goldmark.WithRendererOptions(goldmarkhtml.WithUnsafe()),
 )
 
-// Doc is a parsed page: AST plus data derived from it.
+// Doc is a parsed page: markdown AST or tabular rows.
 type Doc struct {
-	page *site.Page
-	root ast.Node
+	page    *site.Page
+	root    ast.Node
+	table   [][]string
+	fmTitle string
+	body    []byte // markdown body with front matter removed
 }
 
 // Parse parses the page source. Call before title extraction or rendering.
-func Parse(p *site.Page) *Doc {
+func Parse(p *site.Page) (*Doc, error) {
+	if p.IsTabular() {
+		tsv := strings.EqualFold(path.Ext(p.SrcRel), ".tsv")
+		rows, err := parseTabular(p.Source, tsv)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", p.SrcRel, err)
+		}
+		return &Doc{page: p, table: rows}, nil
+	}
 	ctx := parser.NewContext(parser.WithIDs(newIDs()))
-	root := md.Parser().Parse(text.NewReader(p.Source), parser.WithContext(ctx))
-	return &Doc{page: p, root: root}
+	fm, body, stripped := stripFrontMatter(p.Source)
+	src := p.Source
+	if stripped {
+		src = body
+	}
+	root := md.Parser().Parse(text.NewReader(src), parser.WithContext(ctx))
+	return &Doc{page: p, root: root, fmTitle: strings.TrimSpace(fm.Title), body: src}, nil
 }
 
 // Heading is one outline entry of a page.
@@ -61,6 +77,9 @@ const outlineMaxLevel = 4
 
 // Outline lists the page's headings (levels 1..outlineMaxLevel) in order.
 func (d *Doc) Outline() []Heading {
+	if d.table != nil {
+		return nil
+	}
 	var hs []Heading
 	ast.Walk(d.root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if h, ok := n.(*ast.Heading); ok && entering && h.Level <= outlineMaxLevel {
@@ -70,7 +89,7 @@ func (d *Doc) Outline() []Heading {
 					id = string(b)
 				}
 			}
-			hs = append(hs, Heading{Level: h.Level, Text: strings.TrimSpace(nodeText(h, d.page.Source)), ID: id})
+			hs = append(hs, Heading{Level: h.Level, Text: strings.TrimSpace(nodeText(h, d.mdSource())), ID: id})
 		}
 		return ast.WalkContinue, nil
 	})
@@ -109,10 +128,17 @@ func OutlineHTML(hs []Heading) template.HTML {
 
 // Title returns the text of the first level-1 heading, or "".
 func (d *Doc) Title() string {
+	if d.table != nil {
+		return ""
+	}
+	if d.fmTitle != "" {
+		return d.fmTitle
+	}
 	title := ""
+	src := d.mdSource()
 	ast.Walk(d.root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if h, ok := n.(*ast.Heading); ok && entering && h.Level == 1 {
-			title = nodeText(h, d.page.Source)
+			title = nodeText(h, src)
 			return ast.WalkStop, nil
 		}
 		return ast.WalkContinue, nil
@@ -122,14 +148,18 @@ func (d *Doc) Title() string {
 
 // PlainText extracts the searchable text of the page (body and code).
 func (d *Doc) PlainText() string {
+	if d.table != nil {
+		return tablePlainText(d.table)
+	}
 	var b strings.Builder
+	src := d.mdSource()
 	ast.Walk(d.root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil
 		}
 		switch t := n.(type) {
 		case *ast.Text:
-			b.Write(t.Segment.Value(d.page.Source))
+			b.Write(t.Segment.Value(src))
 			b.WriteByte(' ')
 		case *ast.String:
 			b.Write(t.Value)
@@ -138,7 +168,7 @@ func (d *Doc) PlainText() string {
 			lines := n.Lines()
 			for i := 0; i < lines.Len(); i++ {
 				seg := lines.At(i)
-				b.Write(seg.Value(d.page.Source))
+				b.Write(seg.Value(src))
 			}
 			b.WriteByte(' ')
 		}
@@ -154,8 +184,18 @@ var attrRe = regexp.MustCompile(`(src|href)=(["'])([^"']*)(["'])`)
 // and raw HTML fragments (e.g. <img> tags common in READMEs) with one code
 // path. It returns the input-relative paths of referenced local assets.
 func (d *Doc) Body(s *site.Site) (template.HTML, []string, error) {
+	if d.table != nil {
+		title := d.page.Title
+		if title == "" {
+			base := path.Base(d.page.SrcRel)
+			title = strings.TrimSuffix(base, path.Ext(base))
+		}
+		body, err := TableHTML(title, d.table)
+		return body, nil, err
+	}
+
 	var buf bytes.Buffer
-	if err := md.Renderer().Render(&buf, d.page.Source, d.root); err != nil {
+	if err := md.Renderer().Render(&buf, d.mdSource(), d.root); err != nil {
 		return "", nil, fmt.Errorf("render %s: %w", d.page.SrcRel, err)
 	}
 
@@ -185,7 +225,7 @@ func (d *Doc) Body(s *site.Site) (template.HTML, []string, error) {
 			assets = append(assets, resolved)
 			return relRoot + resolved, true
 		}
-		if strings.EqualFold(path.Ext(target), ".md") {
+		if isPageExt(path.Ext(target)) {
 			if p := s.LookupSrc(resolved); p != nil {
 				return relRoot + p.OutRel + frag, true
 			}
@@ -210,6 +250,15 @@ func (d *Doc) Body(s *site.Site) (template.HTML, []string, error) {
 		return m
 	})
 	return template.HTML(out), assets, nil
+}
+
+func isPageExt(ext string) bool {
+	switch strings.ToLower(ext) {
+	case ".md", ".csv", ".tsv":
+		return true
+	default:
+		return false
+	}
 }
 
 func nodeText(n ast.Node, source []byte) string {
